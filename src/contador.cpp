@@ -1,3 +1,10 @@
+#ifndef CONTADOR_TRACING
+#error "Define CONTADOR_TRACING!"
+#endif
+#ifndef CONTADOR_VERBOSE
+#define CONTADOR_VERBOSE false
+#endif
+
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
