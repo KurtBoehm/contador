@@ -1,38 +1,24 @@
-#ifndef CONTADOR_TRACING
-#error "Define CONTADOR_TRACING!"
-#endif
-#ifndef CONTADOR_VERBOSE
-#define CONTADOR_VERBOSE false
-#endif
-
+#include <algorithm>
+#include <array>
+#include <charconv>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <iterator>
+#include <optional>
+#include <ranges>
+#include <string_view>
 
 #include <dlfcn.h>
 
 #include <fmt/base.h>
-#include <fmt/ranges.h>
 #include <fmt/std.h>
 
 #include "contador/contador.hpp"
 
-#if CONTADOR_TRACING
-#include <algorithm>
-#include <array>
-#include <charconv>
-#include <filesystem>
-#include <iterator>
-#include <ranges>
-#include <string_view>
-#endif
-
 namespace {
 std::size_t max_rss_kb{};
-}
-
-#if CONTADOR_TRACING
-namespace {
 bool rec = false;
 std::array<char, 8192> buf{};
 
@@ -87,19 +73,13 @@ void free(void* p) {
   if (!rec) {
     rec = true;
     max_rss_kb = std::max(max_rss_kb, read_rss());
-#if CONTADOR_VERBOSE
-    fmt::print(stderr, "maxrss: {} KiB\n", max_rss_kb);
-#endif
     rec = false;
   }
   free_sys(p);
 }
 }
-#endif
 
-[[gnu::weak]] std::size_t contador::max_rss() {
-#if CONTADOR_TRACING
+[[gnu::weak]] std::optional<std::size_t> contador::max_rss() {
   max_rss_kb = std::max(max_rss_kb, read_rss());
-#endif
   return max_rss_kb;
 }

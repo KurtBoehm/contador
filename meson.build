@@ -4,10 +4,9 @@ fmt_dep = dependency('fmt')
 
 contador_lib = library(
   'contador',
-  'src/contador.cpp',
+  'src/tracing.cpp',
   include_directories: 'include',
   dependencies: fmt_dep,
-  cpp_args: ['-DCONTADOR_TRACING=true'],
 )
 contador_dep = declare_dependency(
   include_directories: 'include',
@@ -16,10 +15,9 @@ contador_dep = declare_dependency(
 
 contador_dummy_lib = library(
   'contador-dummy',
-  'src/contador.cpp',
+  'src/dummy.cpp',
   include_directories: 'include',
   dependencies: fmt_dep,
-  cpp_args: ['-DCONTADOR_TRACING=false'],
 )
 contador_dummy_dep = declare_dependency(
   include_directories: 'include',
