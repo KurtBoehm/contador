@@ -1,6 +1,6 @@
 project('contador', 'cpp', default_options: ['cpp_std=c++23', 'warning_level=3'])
 
-fmt_dep = dependency('fmt')
+fmt_dep = dependency('fmt', version: '>=11.0.0')
 
 contador_lib = library(
   'contador',
