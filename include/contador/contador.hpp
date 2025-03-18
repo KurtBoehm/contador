@@ -5,8 +5,17 @@
 #include <optional>
 
 namespace contador {
-// Maximum RSS in kibibytes
-std::optional<std::size_t> max_rss();
+struct Tracer {
+  Tracer();
+  Tracer(const Tracer&) = delete;
+  Tracer(Tracer&&) = delete;
+  Tracer& operator=(const Tracer&) = delete;
+  Tracer& operator=(Tracer&&) = delete;
+  ~Tracer();
+
+  // Maximum RSS in kibibytes
+  std::optional<std::size_t> max_rss();
+};
 } // namespace contador
 
 #endif // INCLUDE_CONTADOR_HPP

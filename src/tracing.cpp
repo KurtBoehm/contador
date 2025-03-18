@@ -5,13 +5,16 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <deque>
 #include <iterator>
 #include <mutex>
 #include <optional>
 #include <ranges>
 #include <string_view>
+#include <utility>
 
 #include <dlfcn.h>
+#include <unistd.h>
 
 #include <fmt/base.h>
 #include <fmt/std.h>
@@ -71,17 +74,27 @@ std::size_t updated_max_rss() {
 using Free = void (*)(void*);
 Free free_sys = nullptr;
 
+std::mutex& counters_mutex() {
+  static std::mutex mutex{};
+  return mutex;
+}
+std::optional<std::deque<std::pair<int, std::size_t>>>& get_counters() {
+  static std::optional<std::deque<std::pair<int, std::size_t>>> data{};
+  return data;
+}
+
 std::mutex& free_init_mutex() {
   static std::mutex mutex{};
   return mutex;
 }
-
 Free get_free() {
-  std::lock_guard lock{free_init_mutex()};
   if (free_sys == nullptr) {
-    free_sys = reinterpret_cast<Free>(dlsym(RTLD_NEXT, "free"));
+    std::lock_guard lock{free_init_mutex()};
     if (free_sys == nullptr) {
-      fmt::print(stderr, "Error in dlsym(free): {}\n", dlerror());
+      free_sys = reinterpret_cast<Free>(dlsym(RTLD_NEXT, "free"));
+      if (free_sys == nullptr) {
+        fmt::print(stderr, "Error in dlsym(free): {}\n", dlerror());
+      }
     }
   }
   return free_sys;
@@ -90,20 +103,45 @@ Free get_free() {
 
 extern "C" {
 void free(void* p) {
-  thread_local std::size_t i = 0;
-  ++i;
+  const auto tid = gettid();
+  auto& counters_opt = get_counters();
+
+  if (counters_opt.has_value()) {
+    auto& counters = *counters_opt;
+
+    auto it =
+      std::find_if(counters.begin(), counters.end(), [tid](auto p) { return p.first == tid; });
+    std::size_t* iptr{};
+    if (it == counters.end()) {
+      std::lock_guard lock{counters_mutex()};
+      iptr = &counters.emplace_back(tid, 0).second;
+    } else {
+      iptr = &it->second;
+    }
+    auto& i = *iptr;
+
+    ++i;
+    if (i == 1) {
+      updated_max_rss();
+    }
+    if (i > 2) {
+      std::abort();
+    }
+    --i;
+  }
+
   auto free_ptr = get_free();
-  if (i == 1) {
-    updated_max_rss();
-  }
-  if (i > 2) {
-    std::abort();
-  }
   free_ptr(p);
-  --i;
 }
 }
 
-[[gnu::weak]] std::optional<std::size_t> contador::max_rss() {
+[[gnu::weak]] contador::Tracer::Tracer() {
+  get_counters().emplace();
+}
+[[gnu::weak]] contador::Tracer::~Tracer() {
+  get_counters()->clear();
+}
+
+[[gnu::weak]] std::optional<std::size_t> contador::Tracer::max_rss() {
   return updated_max_rss();
 }
