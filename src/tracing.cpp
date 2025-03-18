@@ -1,11 +1,12 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <charconv>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
-#include <filesystem>
 #include <iterator>
+#include <mutex>
 #include <optional>
 #include <ranges>
 #include <string_view>
@@ -18,13 +19,18 @@
 #include "contador/contador.hpp"
 
 namespace {
-std::size_t max_rss_kb{};
-bool rec = false;
-std::array<char, 8192> buf{};
+std::atomic_size_t& get_max_rss_kb() {
+  static std::atomic_size_t max_rss_kb{};
+  return max_rss_kb;
+}
 
-std::string_view read_proc(const std::filesystem::path& p) {
-  FILE* file = std::fopen(p.c_str(), "rb");
+std::string_view read_proc(const char* p) {
+  thread_local std::array<char, 8192> buf{};
+  FILE* file{};
+  while (!(file = std::fopen(p, "rb"))) {
+  }
   const auto num = std::fread(buf.data(), 1, buf.size(), file);
+  std::fclose(file);
   return std::string_view{buf.data(), num};
 }
 std::size_t read_rss() {
@@ -53,33 +59,51 @@ std::size_t read_rss() {
   return ival;
 }
 
+std::size_t updated_max_rss() {
+  const std::size_t rss = read_rss();
+  auto& atom = get_max_rss_kb();
+  std::size_t current = atom.load();
+  while (!atom.compare_exchange_weak(current, std::max(current, rss))) {
+  }
+  return current;
+}
+
 using Free = void (*)(void*);
 Free free_sys = nullptr;
 
-template<typename TFun>
-void fun_init(TFun* target, const char* name) {
-  *target = reinterpret_cast<TFun>(dlsym(RTLD_NEXT, name));
-  if (*target == nullptr) {
-    fprintf(stderr, "Error in dlsym(%s): %s\n", name, dlerror());
+std::mutex& free_init_mutex() {
+  static std::mutex mutex{};
+  return mutex;
+}
+
+Free get_free() {
+  std::lock_guard lock{free_init_mutex()};
+  if (free_sys == nullptr) {
+    free_sys = reinterpret_cast<Free>(dlsym(RTLD_NEXT, "free"));
+    if (free_sys == nullptr) {
+      fmt::print(stderr, "Error in dlsym(free): {}\n", dlerror());
+    }
   }
+  return free_sys;
 }
 } // namespace
 
 extern "C" {
 void free(void* p) {
-  if (free_sys == nullptr) {
-    fun_init(&free_sys, "free");
+  thread_local std::size_t i = 0;
+  ++i;
+  auto free_ptr = get_free();
+  if (i == 1) {
+    updated_max_rss();
   }
-  if (!rec) {
-    rec = true;
-    max_rss_kb = std::max(max_rss_kb, read_rss());
-    rec = false;
+  if (i > 2) {
+    std::abort();
   }
-  free_sys(p);
+  free_ptr(p);
+  --i;
 }
 }
 
 [[gnu::weak]] std::optional<std::size_t> contador::max_rss() {
-  max_rss_kb = std::max(max_rss_kb, read_rss());
-  return max_rss_kb;
+  return updated_max_rss();
 }
