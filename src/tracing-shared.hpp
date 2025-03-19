@@ -16,6 +16,7 @@
 
 #include <fmt/base.h>
 #include <fmt/std.h>
+#include <utility>
 
 namespace {
 using Free = void (*)(void*);
@@ -26,17 +27,18 @@ std::atomic_size_t& get_max_rss_kb() {
   return max_rss_kb;
 }
 
-std::string_view read_proc(const char* p) {
-  thread_local std::array<char, 8192> buf{};
+std::pair<std::array<char, 8192>, std::size_t> read_proc(const char* p) {
+  std::array<char, 8192> buf{};
   FILE* file{};
   while (!(file = std::fopen(p, "rb"))) {
   }
   const auto num = std::fread(buf.data(), 1, buf.size(), file);
   std::fclose(file);
-  return std::string_view{buf.data(), num};
+  return std::make_pair(std::move(buf), num);
 }
 std::size_t read_rss() {
-  const auto msg = read_proc("/proc/self/smaps_rollup");
+  const auto [msg_arr, msg_len] = read_proc("/proc/self/smaps_rollup");
+  const std::string_view msg{msg_arr.data(), msg_len};
   auto lines = std::views::split(msg, '\n');
   auto line = [&] {
     auto it = lines.begin();
