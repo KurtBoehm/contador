@@ -28,13 +28,13 @@ std::atomic_size_t& get_max_rss_kb() {
 }
 
 std::pair<std::array<char, 8192>, std::size_t> read_proc(const char* p) {
-  std::array<char, 8192> buf{};
+  std::pair<std::array<char, 8192>, std::size_t> out{};
   FILE* file{};
   while (!(file = std::fopen(p, "rb"))) {
   }
-  const auto num = std::fread(buf.data(), 1, buf.size(), file);
+  out.second = std::fread(out.first.data(), 1, out.first.size(), file);
   std::fclose(file);
-  return std::make_pair(std::move(buf), num);
+  return out;
 }
 std::size_t read_rss() {
   const auto [msg_arr, msg_len] = read_proc("/proc/self/smaps_rollup");
