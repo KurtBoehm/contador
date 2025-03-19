@@ -13,6 +13,17 @@ contador_dep = declare_dependency(
   link_with: contador_lib,
 )
 
+contador_reduced_lib = library(
+  'contador-reduced',
+  'src/tracing-reduced.cpp',
+  include_directories: 'include',
+  dependencies: fmt_dep,
+)
+contador_reduced_dep = declare_dependency(
+  include_directories: 'include',
+  link_with: contador_reduced_lib,
+)
+
 contador_dummy_lib = library(
   'contador-dummy',
   'src/dummy.cpp',
