@@ -15,14 +15,12 @@
 #include <cstdlib>
 #include <iterator>
 #include <mutex>
+#include <print>
 #include <ranges>
 #include <string_view>
 #include <utility>
 
 #include <dlfcn.h>
-
-#include <fmt/base.h>
-#include <fmt/std.h>
 
 using Free = void (*)(void*);
 Free free_sys = nullptr;
@@ -57,7 +55,7 @@ inline std::size_t read_rss() {
   auto rval = *it++;
   auto key = std::string_view{rkey.data(), rkey.size()};
   if (key != "Rss") {
-    fmt::print(stderr, "Key: {}\n", key);
+    std::print(stderr, "Key: {}\n", key);
     std::abort();
   }
   auto val = std::string_view{rval.data(), rval.size()};
@@ -87,7 +85,7 @@ inline Free get_free() {
     if (free_sys == nullptr) {
       free_sys = reinterpret_cast<Free>(dlsym(RTLD_NEXT, "free"));
       if (free_sys == nullptr) {
-        fmt::print(stderr, "Error in dlsym(free): {}\n", dlerror());
+        std::print(stderr, "Error in dlsym(free): {}\n", dlerror());
       }
     }
   }

@@ -19,12 +19,14 @@
 #include "tracing-shared.hpp"
 
 namespace {
+using Counter = std::pair<int, std::size_t>;
+
 std::mutex& counters_mutex() {
   static std::mutex mutex{};
   return mutex;
 }
-std::optional<std::deque<std::pair<int, std::size_t>>>& get_counters() {
-  static std::optional<std::deque<std::pair<int, std::size_t>>> data{};
+std::optional<std::deque<Counter>>& get_counters() {
+  static std::optional<std::deque<Counter>> data{};
   return data;
 }
 } // namespace
@@ -37,7 +39,7 @@ void free(void* p) {
   if (counters_opt.has_value()) {
     auto& counters = *counters_opt;
 
-    auto it = std::ranges::find_if(counters, [tid](auto p) { return p.first == tid; });
+    auto it = std::ranges::find_if(counters, [tid](Counter p) { return p.first == tid; });
     std::size_t* iptr{};
     if (it == counters.end()) {
       std::lock_guard lock{counters_mutex()};
