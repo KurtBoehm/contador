@@ -1,3 +1,9 @@
+// This file is part of https://github.com/KurtBoehm/contador.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #ifndef SRC_TRACING_SHARED_HPP
 #define SRC_TRACING_SHARED_HPP
 
@@ -11,32 +17,31 @@
 #include <mutex>
 #include <ranges>
 #include <string_view>
+#include <utility>
 
 #include <dlfcn.h>
 
 #include <fmt/base.h>
 #include <fmt/std.h>
-#include <utility>
 
-namespace {
 using Free = void (*)(void*);
 Free free_sys = nullptr;
 
-std::atomic_size_t& get_max_rss_kb() {
+inline std::atomic_size_t& get_max_rss_kb() {
   static std::atomic_size_t max_rss_kb{};
   return max_rss_kb;
 }
 
-std::pair<std::array<char, 8192>, std::size_t> read_proc(const char* p) {
+inline std::pair<std::array<char, 8192>, std::size_t> read_proc(const char* p) {
   std::pair<std::array<char, 8192>, std::size_t> out{};
   FILE* file{};
-  while (!(file = std::fopen(p, "rb"))) {
+  while ((file = std::fopen(p, "rb")) == nullptr) {
   }
   out.second = std::fread(out.first.data(), 1, out.first.size(), file);
-  std::fclose(file);
+  (void)std::fclose(file);
   return out;
 }
-std::size_t read_rss() {
+inline std::size_t read_rss() {
   const auto [msg_arr, msg_len] = read_proc("/proc/self/smaps_rollup");
   const std::string_view msg{msg_arr.data(), msg_len};
   auto lines = std::views::split(msg, '\n');
@@ -63,7 +68,7 @@ std::size_t read_rss() {
   return ival;
 }
 
-std::size_t updated_max_rss() {
+inline std::size_t updated_max_rss() {
   const std::size_t rss = read_rss();
   auto& atom = get_max_rss_kb();
   std::size_t current = atom.load();
@@ -72,11 +77,11 @@ std::size_t updated_max_rss() {
   return current;
 }
 
-std::mutex& free_init_mutex() {
+inline std::mutex& free_init_mutex() {
   static std::mutex mutex{};
   return mutex;
 }
-Free get_free() {
+inline Free get_free() {
   if (free_sys == nullptr) {
     std::lock_guard lock{free_init_mutex()};
     if (free_sys == nullptr) {
@@ -88,6 +93,5 @@ Free get_free() {
   }
   return free_sys;
 }
-} // namespace
 
 #endif // SRC_TRACING_SHARED_HPP

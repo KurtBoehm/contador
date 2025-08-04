@@ -1,3 +1,9 @@
+// This file is part of https://github.com/KurtBoehm/contador.
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
@@ -31,8 +37,7 @@ void free(void* p) {
   if (counters_opt.has_value()) {
     auto& counters = *counters_opt;
 
-    auto it =
-      std::find_if(counters.begin(), counters.end(), [tid](auto p) { return p.first == tid; });
+    auto it = std::ranges::find_if(counters, [tid](auto p) { return p.first == tid; });
     std::size_t* iptr{};
     if (it == counters.end()) {
       std::lock_guard lock{counters_mutex()};
