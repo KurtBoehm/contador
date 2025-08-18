@@ -29,7 +29,6 @@ contador_dummy_lib = library(
   'contador-dummy',
   'src/dummy.cpp',
   include_directories: 'include',
-  dependencies: dl_dep,
 )
 contador_dummy_dep = declare_dependency(
   include_directories: 'include',
