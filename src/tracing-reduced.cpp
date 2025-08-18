@@ -7,24 +7,24 @@
 #include <cstddef>
 #include <cstdlib>
 #include <optional>
+#include <thread>
 #include <utility>
-
-#include <unistd.h>
 
 #include "contador/contador.hpp"
 
 #include "tracing-shared.hpp"
 
 namespace {
-std::optional<std::pair<int, std::size_t>>& get_main_data() {
-  static std::optional<std::pair<int, std::size_t>> data{};
+std::optional<std::pair<std::thread::id, std::size_t>>& get_main_data() {
+  static std::optional<std::pair<std::thread::id, std::size_t>> data{};
   return data;
 }
 } // namespace
 
 extern "C" {
 void free(void* p) {
-  if (auto& data_opt = get_main_data(); data_opt.has_value() && data_opt->first == gettid()) {
+  if (auto& data_opt = get_main_data();
+      data_opt.has_value() && data_opt->first == std::this_thread::get_id()) {
     auto& i = data_opt->second;
     ++i;
     if (i == 1) {
@@ -42,7 +42,7 @@ void free(void* p) {
 }
 
 [[gnu::weak]] contador::Tracer::Tracer() {
-  get_main_data().emplace(gettid(), 0);
+  get_main_data().emplace(std::this_thread::get_id(), 0);
 }
 [[gnu::weak]] contador::Tracer::~Tracer() {
   get_main_data().reset();
