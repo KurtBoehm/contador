@@ -7,43 +7,48 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
-#include <deque>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
+#include <thread>
 #include <utility>
-
-#include <unistd.h>
+#include <vector>
 
 #include "contador/contador.hpp"
 
 #include "tracing-shared.hpp"
 
 namespace {
-using Counter = std::pair<int, std::size_t>;
+using Counter = std::pair<std::thread::id, std::size_t>;
 
-std::mutex& counters_mutex() {
-  static std::mutex mutex{};
+std::shared_mutex& counters_mutex() {
+  static std::shared_mutex mutex{};
   return mutex;
 }
-std::optional<std::deque<Counter>>& get_counters() {
-  static std::optional<std::deque<Counter>> data{};
+std::optional<std::vector<Counter>>& get_counters() {
+  static std::optional<std::vector<Counter>> data{};
   return data;
 }
 } // namespace
 
 extern "C" {
 void free(void* p) {
-  const auto tid = gettid();
-  auto& counters_opt = get_counters();
+  const auto tid = std::this_thread::get_id();
 
+  std::shared_lock shlck{counters_mutex()};
+  auto& counters_opt = get_counters();
   if (counters_opt.has_value()) {
     auto& counters = *counters_opt;
-
     auto it = std::ranges::find_if(counters, [tid](Counter p) { return p.first == tid; });
+
     std::size_t* iptr{};
     if (it == counters.end()) {
-      std::lock_guard lock{counters_mutex()};
-      iptr = &counters.emplace_back(tid, 0).second;
+      shlck.unlock();
+      {
+        std::unique_lock lock{counters_mutex()};
+        iptr = &counters.emplace_back(tid, 0).second;
+      }
+      shlck.lock();
     } else {
       iptr = &it->second;
     }
@@ -58,6 +63,7 @@ void free(void* p) {
     }
     --i;
   }
+  shlck.unlock();
 
   auto free_ptr = get_free();
   free_ptr(p);
