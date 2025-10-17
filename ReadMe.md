@@ -1,7 +1,7 @@
 # Contador 🧮: Precise Maximum RSS Tracing
 
 Contador (Spanish “counter”) provides a reasonably convenient mechanism to measure the memory consumption (_maximum resident set size_) of a given program with high accuracy.
-It relies on the information provided in `/proc/self/smaps_rollup` (specifically the value associated with the `Rss` key) and is therefore Linux-specific.
+It relies on the information provided in `/proc/self/smaps_rollup` (specifically the value associated with the `Rss` key) and is therefore Linux-specific; the dummy version (see later) is also available on other operating systems to avoid issues with cross-platform code.
 Results so determined are much more accurate than `getrusage().ru_maxrss`, which can result bogus results for multithreaded programs with a short runtime.
 However, repeatedly querying `smaps_rollup` is much more expensive than calling `getrusage` and should therefore not be performed during regular program execution.
 
