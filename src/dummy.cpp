@@ -9,9 +9,11 @@
 
 #include "contador/contador.hpp"
 
-[[gnu::weak]] contador::Tracer::Tracer() = default;
-[[gnu::weak]] contador::Tracer::~Tracer() = default;
+#include "shared.hpp"
 
-[[gnu::weak]] std::optional<std::size_t> contador::Tracer::max_rss() {
+CONTADOR_GNU_WEAK contador::Tracer::Tracer() = default;
+CONTADOR_GNU_WEAK contador::Tracer::~Tracer() = default;
+
+CONTADOR_GNU_WEAK std::optional<std::size_t> contador::Tracer::max_rss() {
   return std::nullopt;
 }
