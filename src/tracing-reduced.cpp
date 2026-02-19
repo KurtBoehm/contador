@@ -15,31 +15,35 @@
 #include "tracing-shared.hpp"
 
 namespace {
-std::optional<std::pair<std::thread::id, std::size_t>>& get_main_data() {
-  static std::optional<std::pair<std::thread::id, std::size_t>> data{};
+using MainData = std::pair<std::thread::id, std::size_t>;
+
+std::optional<MainData>& get_main_data() {
+  static std::optional<MainData> data{};
   return data;
 }
 } // namespace
 
 extern "C" {
 void free(void* p) {
-  if (auto& data_opt = get_main_data();
-      data_opt.has_value() && data_opt->first == std::this_thread::get_id()) {
-    auto& i = data_opt->second;
-    ++i;
-    if (i == 1) {
+  const auto tid = std::this_thread::get_id();
+  if (auto& data_opt = get_main_data(); data_opt.has_value() && data_opt->first == tid) {
+    auto& depth = data_opt->second;
+    ++depth;
+    if (depth == 1) {
+      // Outermost free call on the main thread.
       updated_max_rss();
     }
-    if (i > 2) {
+    if (depth > 2) {
+      // More than 2 nested frees on the main thread is considered an error.
       std::abort();
     }
-    --i;
+    --depth;
   }
 
   auto free_ptr = get_free();
   free_ptr(p);
 }
-}
+} // extern "C"
 
 [[gnu::weak]] contador::Tracer::Tracer() {
   get_main_data().emplace(std::this_thread::get_id(), 0);

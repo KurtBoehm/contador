@@ -10,6 +10,7 @@
 #include <deque>
 #include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <thread>
 #include <utility>
 
@@ -20,13 +21,35 @@
 namespace {
 using Counter = std::pair<std::thread::id, std::size_t>;
 
-std::mutex& counters_mutex() {
-  static std::mutex mutex{};
+std::shared_mutex& counters_mutex() {
+  static std::shared_mutex mutex{};
   return mutex;
 }
 std::optional<std::deque<Counter>>& get_counters() {
   static std::optional<std::deque<Counter>> data{};
   return data;
+}
+
+// Get or create the per-thread counter entry under lock.
+std::size_t& get_thread_counter(std::thread::id tid, std::deque<Counter>& counters) {
+  {
+    std::shared_lock lock{counters_mutex()};
+    const auto it =
+      std::ranges::find_if(counters, [tid](const Counter& p) { return p.first == tid; });
+    if (it != counters.end()) {
+      return it->second;
+    }
+  }
+
+  {
+    std::unique_lock lock{counters_mutex()};
+    const auto it =
+      std::ranges::find_if(counters, [tid](const Counter& p) { return p.first == tid; });
+    if (it != counters.end()) {
+      return it->second;
+    }
+    return counters.emplace_back(tid, 0).second;
+  }
 }
 } // namespace
 
@@ -37,32 +60,24 @@ void free(void* p) {
   auto& counters_opt = get_counters();
 
   if (counters_opt.has_value()) {
-    auto& counters = *counters_opt;
-    auto it = std::ranges::find_if(counters, [tid](Counter p) { return p.first == tid; });
+    std::size_t& counter = get_thread_counter(tid, *counters_opt);
 
-    std::size_t* iptr{};
-    if (it == counters.end()) {
-      std::lock_guard lock{counters_mutex()};
-      iptr = &counters.emplace_back(tid, 0).second;
-    } else {
-      iptr = &it->second;
-    }
-    auto& i = *iptr;
-
-    ++i;
-    if (i == 1) {
+    ++counter;
+    if (counter == 1) {
+      // First level: this is the "outermost" free call on this thread.
       updated_max_rss();
     }
-    if (i > 2) {
+    if (counter > 2) {
+      // More than 2 nested frees on the same thread is considered an error.
       std::abort();
     }
-    --i;
+    --counter;
   }
 
   auto free_ptr = get_free();
   free_ptr(p);
 }
-}
+} // extern "C"
 
 [[gnu::weak]] contador::Tracer::Tracer() {
   get_counters().emplace();

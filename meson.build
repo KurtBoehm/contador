@@ -1,3 +1,9 @@
+# This file is part of https://github.com/KurtBoehm/contador.
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
 project('contador', 'cpp', default_options: ['cpp_std=c++23', 'warning_level=3'])
 
 cc = meson.get_compiler('cpp')
@@ -36,3 +42,7 @@ contador_dummy_dep = declare_dependency(
   include_directories: 'include',
   link_with: contador_dummy_lib,
 )
+
+if get_option('include_tests')
+  subdir('test')
+endif

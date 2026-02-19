@@ -17,13 +17,13 @@
 #include <mutex>
 #include <print>
 #include <ranges>
+#include <shared_mutex>
 #include <string_view>
 #include <utility>
 
 #include <dlfcn.h>
 
 using Free = void (*)(void*);
-Free free_sys = nullptr;
 
 inline std::atomic_size_t& get_max_rss_kb() {
   static std::atomic_size_t max_rss_kb{};
@@ -75,21 +75,37 @@ inline std::size_t updated_max_rss() {
   return current;
 }
 
-inline std::mutex& free_init_mutex() {
-  static std::mutex mutex{};
+inline Free& get_free_sys() {
+  static Free get_free_sys{};
+  return get_free_sys;
+}
+inline std::shared_mutex& free_init_mutex() {
+  static std::shared_mutex mutex{};
   return mutex;
 }
 inline Free get_free() {
-  if (free_sys == nullptr) {
-    std::lock_guard lock{free_init_mutex()};
-    if (free_sys == nullptr) {
-      free_sys = reinterpret_cast<Free>(dlsym(RTLD_NEXT, "free"));
-      if (free_sys == nullptr) {
-        std::print(stderr, "Error in dlsym(free): {}\n", dlerror());
-      }
+  auto& free_sys = get_free_sys();
+
+  // Fast path: shared lock, no initialization.
+  {
+    std::shared_lock<std::shared_mutex> lock{free_init_mutex()};
+    if (free_sys != nullptr) {
+      return free_sys;
     }
   }
-  return free_sys;
+
+  // Slow path: unique lock and initialize if still null.
+  {
+    std::unique_lock<std::shared_mutex> lock{free_init_mutex()};
+    if (free_sys == nullptr) {
+      void* sym = dlsym(RTLD_NEXT, "free");
+      if (sym == nullptr) {
+        std::print(stderr, "Error in dlsym(free): {}\n", dlerror());
+      }
+      free_sys = reinterpret_cast<Free>(sym);
+    }
+    return free_sys;
+  }
 }
 
 #endif // SRC_TRACING_SHARED_HPP
